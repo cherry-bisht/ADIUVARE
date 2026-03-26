@@ -56,3 +56,20 @@ def test_pipeline_picks_up_suspicious_user_agent():
     assert gate.passed is True
     assert out is not None
     assert out[0] > 0.0
+
+
+def test_pipeline_marks_missing_user_agent_as_suspicious():
+    ctx = RequestContext(
+        identity="u1",
+        payload=None,
+        url="/",
+        method="GET",
+        headers={},
+        ip="127.0.0.1",
+        endpoint="/",
+    )
+
+    gate, out = asyncio.run(Pipeline(IdentityStore()).process(ctx))
+    assert gate.passed is True
+    assert out is not None
+    assert out[0] > 0.0

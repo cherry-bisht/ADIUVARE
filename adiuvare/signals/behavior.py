@@ -19,6 +19,9 @@ class BehaviorSignal(SoftSignal):
         return 0.0
 
     def ua_score(self, ua: str | None) -> float:
+        if not ua:
+            return 0.35
+
         parsed = user_agent_parser.ParseUserAgent(ua)
         ua_name = (parsed.get("family") or "").lower()
         if "headlesschrome" in ua_name or "phantomjs" in ua_name:
