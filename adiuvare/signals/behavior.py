@@ -42,7 +42,7 @@ class BehaviorSignal(SoftSignal):
     async def extract(self, ctx: RequestContext) -> SignalResult:
         rscore = self.score_trackA(ctx.identity)
         uscore = self.ua_score(ctx.headers.get("User-Agent"))
-        final = (rscore * 0.60) + (uscore * 0.40)
+        final = (rscore * 0.55) + (uscore * 0.45)
 
         if final == 0.0:
             return SignalResult(score=0.0, reason="behavior_clean")
