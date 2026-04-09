@@ -64,3 +64,12 @@ class IdentityStore:
         win.seen += 1
         self.update(identity, win)
         return win.seen
+
+    def apply_score(self, identity: str, score: float, alpha: float = 0.35) -> IdentityWindow:
+        win = self.get(identity)
+        if win.score_ewma == 0.0:
+            win.score_ewma = score
+        else:
+            win.score_ewma = (win.score_ewma * (1 - alpha)) + (score * alpha)
+        self.update(identity, win)
+        return win

@@ -37,11 +37,10 @@ class Pipeline:
                     exception=exc,
                 )
 
-        score, breakdown = compute_score(sig_res)
-        verdict = compute_verdict(score)
-        win = self._id_store.get(ctx.identity)
-        win.score_ewma = score
-        self._id_store.update(ctx.identity, win)
+        score, breakdown = compute_score(sig_res, ctx.snapshot)
+        identity_risk = sig_res.get("identity").score if "identity" in sig_res else 0.0
+        verdict = compute_verdict(score, ctx.snapshot, identity_risk=identity_risk)
+        self._id_store.apply_score(ctx.identity, score)
         event = AdiuvareEvent(
             identity=ctx.identity,
             endpoint=ctx.endpoint,

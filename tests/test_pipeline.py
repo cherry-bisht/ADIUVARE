@@ -110,3 +110,4 @@ def test_pipeline_repeats_pick_up_identity_state():
     assert first is not None
     assert second is not None
     assert second.score > first.score
+    assert store.get("u1").score_ewma < second.score
