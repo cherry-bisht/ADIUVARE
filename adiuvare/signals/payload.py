@@ -12,10 +12,15 @@ class PayloadSignal(SoftSignal):
         if not ctx.payload:
             return SignalResult(score=0.0, reason="no_payload")
 
-        text = normalize(ctx.payload)
+        raw = ctx.payload
+        text = normalize(raw)
         sql_lib = detect_sqli(text)
         xss_lib = detect_xss(text)
         sql_pat = check_sql(text)
+        if raw != text:
+            raw_sql = check_sql(raw)
+            if raw_sql[0] and raw_sql[1] > sql_pat[1]:
+                sql_pat = raw_sql
         xss_pat = check_xss(text)
         path_pat = check_path(text)
 

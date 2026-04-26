@@ -12,6 +12,7 @@ _decode_u = re.compile(r"\\u([0-9a-fA-F]{4})")
 _sql_cmnt = re.compile(r"/\*.*?\*/", re.DOTALL)
 _line_cmnt = re.compile(r"(--|#).*")
 _noise = re.compile(r"[\r\n\x00\t]")
+_quote_cmnt = re.compile(r"""(?i)\b\w+['"]\s*(?:--|\#|/\*)""")
 _lib = None
 _bound = False
 
@@ -85,17 +86,37 @@ def normalize(text: str | None, max_passes: int = 3) -> str:
 def _fallback_sqli(text: str) -> dict:
     low = text.lower()
     hits = (
-        "' or 1=1",
-        "\" or 1=1",
         "union select",
         "sleep(",
+        "pg_sleep(",
         "benchmark(",
+        "waitfor delay",
         "information_schema",
+        "extractvalue(",
+        "updatexml(",
+        "json_extract(",
     )
+    if _bool_taut_hit(low):
+        return {"hit": True, "conf": 0.85, "fp": "fallback"}
+    if _quote_cmnt.search(low):
+        return {"hit": True, "conf": 0.82, "fp": "fallback"}
+    if "exists(select" in low or "exists (select" in low:
+        return {"hit": True, "conf": 0.82, "fp": "fallback"}
     for needle in hits:
         if needle in low:
-            return {"hit": True, "conf": 0.80, "fp": "fallback"}
+            return {"hit": True, "conf": 0.82, "fp": "fallback"}
     return {"hit": False, "conf": 0.0, "fp": ""}
+
+
+def _bool_taut_hit(text: str) -> bool:
+    low = " ".join(text.lower().split())
+    if " or " not in low or "=" not in low:
+        return False
+    if "' or " in low and "'='" in low:
+        return True
+    if '" or ' in low and '"="' in low:
+        return True
+    return False
 
 
 def _fallback_xss(text: str) -> dict:

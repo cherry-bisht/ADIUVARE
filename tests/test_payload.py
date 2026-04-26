@@ -92,3 +92,63 @@ def test_payload_decodes_wrapped_script_text():
 
     res = asyncio.run(PayloadSignal().extract(ctx))
     assert res.score >= 0.6
+
+
+def test_payload_marks_comment_truncation_text():
+    ctx = RequestContext(
+        identity="u1",
+        payload="admin'--",
+        url="/login",
+        method="POST",
+        headers={},
+        ip="127.0.0.1",
+        endpoint="/login",
+    )
+
+    res = asyncio.run(PayloadSignal().extract(ctx))
+    assert res.score >= 0.8
+
+
+def test_payload_marks_boolean_tautology_text():
+    ctx = RequestContext(
+        identity="u1",
+        payload="' OR 'a'='a",
+        url="/login",
+        method="POST",
+        headers={},
+        ip="127.0.0.1",
+        endpoint="/login",
+    )
+
+    res = asyncio.run(PayloadSignal().extract(ctx))
+    assert res.score >= 0.8
+
+
+def test_payload_marks_encoded_function_sqli_text():
+    ctx = RequestContext(
+        identity="u1",
+        payload="%27%20AND%20updatexml%281%2Cconcat%280x7e%2Cuser%28%29%29%2C1%29--",
+        url="/search",
+        method="POST",
+        headers={},
+        ip="127.0.0.1",
+        endpoint="/search",
+    )
+
+    res = asyncio.run(PayloadSignal().extract(ctx))
+    assert res.score >= 0.8
+
+
+def test_payload_keeps_union_phrase_clean():
+    ctx = RequestContext(
+        identity="u1",
+        payload="union of sets and intervals",
+        url="/search",
+        method="GET",
+        headers={},
+        ip="127.0.0.1",
+        endpoint="/search",
+    )
+
+    res = asyncio.run(PayloadSignal().extract(ctx))
+    assert res.score == 0.0

@@ -5,4 +5,4 @@ venv/
 .adiuvare/
 __pycache__/
 *.pyc
-
+simulation/

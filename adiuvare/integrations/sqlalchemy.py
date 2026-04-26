@@ -2,6 +2,7 @@ from contextvars import ContextVar
 
 from sqlalchemy import event
 
+from ..signals.patterns import check_sql
 from ..vendor import detect_sqli, normalize
 
 _sink_mode: ContextVar[str] = ContextVar("adiuvare_sink_mode", default="async")
@@ -21,7 +22,10 @@ def check_statement(
     cleaned = normalize(statement)
     res = detect_sqli(cleaned)
     if not res["hit"]:
-        return
+        pat = check_sql(cleaned)
+        if not pat[0]:
+            return
+        res = {"hit": True, "conf": pat[1], "fp": pat[2]}
 
     guard.record_sink_detection(
         statement=statement,

@@ -5,12 +5,18 @@ except ImportError:
 
 
 sql_pats = [
+    (_re.compile(r"""(?i)\b\w+['"]\s*(?:--|\#|/\*)"""), 0.88, "quote_cmnt"),
     (_re.compile(r"(?i)\bselect\b.{0,40}\bfrom\b"), 0.72, "select_from"),
     (_re.compile(r"(?i)\bunion\s+select\b"), 0.92, "union_select"),
     (_re.compile(r"(?i)\bdrop\s+table\b"), 0.95, "drop_table"),
+    (_re.compile(r"(?i)\bpg_sleep\s*\("), 0.88, "time_pgsleep"),
     (_re.compile(r"(?i)\bsleep\s*\(\s*\d"), 0.88, "time_sleep"),
     (_re.compile(r"(?i)\bbenchmark\s*\("), 0.86, "time_benchmark"),
     (_re.compile(r"(?i)\bwaitfor\s+delay\b"), 0.88, "time_waitfor"),
+    (_re.compile(r"(?i)\bexists\s*\(\s*select\b"), 0.82, "exists_select"),
+    (_re.compile(r"(?i)\bextractvalue\s*\("), 0.84, "func_extractvalue"),
+    (_re.compile(r"(?i)\bupdatexml\s*\("), 0.84, "func_updatexml"),
+    (_re.compile(r"(?i)\bjson_extract\s*\("), 0.72, "func_json_extract"),
     (_re.compile(r"(?i)\binformation_schema\b"), 0.76, "schema_peek"),
 ]
 
@@ -35,7 +41,20 @@ def _scan(pats, text: str) -> tuple[bool, float, str]:
     return False, 0.0, ""
 
 
+def _bool_taut_hit(text: str) -> bool:
+    low = " ".join(text.lower().split())
+    if " or " not in low or "=" not in low:
+        return False
+    if "' or " in low and "'='" in low:
+        return True
+    if '" or ' in low and '"="' in low:
+        return True
+    return False
+
+
 def check_sql(text: str) -> tuple[bool, float, str]:
+    if _bool_taut_hit(text):
+        return True, 0.92, "bool_taut"
     return _scan(sql_pats, text)
 
 

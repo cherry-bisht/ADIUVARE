@@ -54,19 +54,28 @@ def _open_tui() -> None:
     if cfg is None:
         _run_init(Path("adiuvare.yaml"), no_tui=False)
         return
-    from adiuvare.tui.app import AdiuvareApp
+    try:
+        from adiuvare.tui.app import AdiuvareApp
+    except ImportError:
+        print("tui deps are missing, try pip install -e .[tui]")
+        raise SystemExit(1)
 
     AdiuvareApp(config_path=str(cfg)).run()
 
 
 def _run_init(path: Path, no_tui: bool) -> None:
     dest = path if path.suffix else path / "adiuvare.yaml"
+    if dest.exists():
+        answer = input(f"{dest} exists - overwrite? [y/N] ").strip().lower()
+        if answer != "y":
+            print("aborted")
+            return
     if no_tui:
         _plain_terminal_wizard(dest)
         return
     try:
         from adiuvare.tui.wizard import run_wizard
-    except Exception:
+    except ImportError:
         _plain_terminal_wizard(dest)
         return
     run_wizard(dest)
@@ -90,6 +99,7 @@ def _plain_terminal_wizard(dest: Path) -> None:
             ai_mode=ai_mode,
         ),
     )
+    print(f"wrote config: {save_path}")
 
 
 def _run_status() -> None:
@@ -99,6 +109,8 @@ def _run_status() -> None:
         return
     loaded = load_config(cfg)
     print(f"config: {cfg}")
+    print(f"framework: {loaded.meta.framework}")
+    print(f"instances: {loaded.meta.instances}")
     print(f"observe_only: {loaded.runtime.observe_only}")
     print(f"ai_mode: {loaded.ai.mode}")
     print(f"audit_db: {loaded.runtime.audit_db_path}")
