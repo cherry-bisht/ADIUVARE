@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import sys
 from collections import deque
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
@@ -135,3 +136,36 @@ class UnixSocketEventStream:
         else:
             data = {"value": str(event)}
         return (json.dumps(data) + "\n").encode("utf-8")
+
+
+class RedisEventStream:
+    def __init__(self, project: str, redis_url: str) -> None:
+        self._channel = f"adiuvare:events:{project}"
+        self._url = redis_url
+        self._client = None
+        self._replay = deque(maxlen=100)
+
+    async def start(self) -> None:
+        mod = sys.modules.get("redis.asyncio")
+        if mod is None:
+            import redis.asyncio as mod
+
+        self._client = mod.from_url(self._url)
+
+    async def emit(self, event) -> None:
+        data = asdict(event) if is_dataclass(event) else event
+        payload = json.dumps(data)
+        self._replay.append(payload)
+
+        if self._client is None:
+            return
+
+        await self._client.publish(self._channel, payload)
+        key = f"{self._channel}:replay"
+        await self._client.lpush(key, payload)
+        await self._client.ltrim(key, 0, 99)
+
+    async def stop(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None

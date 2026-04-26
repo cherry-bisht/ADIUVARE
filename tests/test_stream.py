@@ -1,8 +1,10 @@
 import asyncio
 import json
+import sys
+import types
 
 from adiuvare.core.models import AdiuvareEvent
-from adiuvare.state.event_stream import UnixSocketEventStream
+from adiuvare.state.event_stream import RedisEventStream, UnixSocketEventStream
 
 
 def test_stream_replays_recent_event_to_new_client(tmp_path):
@@ -89,3 +91,56 @@ def test_stream_command_handler_still_works(tmp_path):
         assert res == {"name": "ping", "args": {"ok": True}}
 
     asyncio.run(run())
+
+
+def test_redis_stream_publishes_and_replays(monkeypatch):
+    seen = {}
+
+    class FakeClient:
+        async def publish(self, channel, payload):
+            seen["pub"] = (channel, json.loads(payload))
+
+        async def lpush(self, key, payload):
+            seen["lpush"] = (key, json.loads(payload))
+
+        async def ltrim(self, key, low, high):
+            seen["trim"] = (key, low, high)
+
+        async def aclose(self):
+            seen["closed"] = True
+
+    fake_client = FakeClient()
+    redis_pkg = types.ModuleType("redis")
+    redis_async = types.ModuleType("redis.asyncio")
+
+    def from_url(url):
+        seen["url"] = url
+        return fake_client
+
+    redis_async.from_url = from_url
+    redis_pkg.asyncio = redis_async
+    monkeypatch.setitem(sys.modules, "redis", redis_pkg)
+    monkeypatch.setitem(sys.modules, "redis.asyncio", redis_async)
+
+    async def run():
+        stream = RedisEventStream(project="demo", redis_url="redis://127.0.0.1:6379/0")
+        await stream.start()
+        await stream.emit(
+            AdiuvareEvent(
+                identity="u9",
+                endpoint="/search",
+                score=0.61,
+                verdict="throttle",
+                breakdown={"payload": 0.61},
+            )
+        )
+        await stream.stop()
+
+    asyncio.run(run())
+
+    assert seen["url"] == "redis://127.0.0.1:6379/0"
+    assert seen["pub"][0] == "adiuvare:events:demo"
+    assert seen["pub"][1]["identity"] == "u9"
+    assert seen["lpush"][0] == "adiuvare:events:demo:replay"
+    assert seen["trim"] == ("adiuvare:events:demo:replay", 0, 99)
+    assert seen["closed"] is True

@@ -49,6 +49,14 @@ def _env_overrides(data: dict) -> dict:
         data["ai"]["mode"] = ai_mode
         data["ai"]["enabled"] = ai_mode != "off"
 
+    if ollama_url := os.getenv("ADIUVARE_OLLAMA_URL"):
+        data.setdefault("ai", {})
+        data["ai"]["base_url"] = ollama_url
+
+    if redis_url := os.getenv("ADIUVARE_REDIS_URL"):
+        data.setdefault("runtime", {})
+        data["runtime"]["redis_url"] = redis_url
+
     if observe := os.getenv("ADIUVARE_OBSERVE_ONLY"):
         data.setdefault("runtime", {})
         data["runtime"]["observe_only"] = observe.lower() in {"1", "true", "yes", "on"}

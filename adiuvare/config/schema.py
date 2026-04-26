@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -20,8 +22,10 @@ class Thresholds(BaseModel):
 
 
 class RuntimeConfig(BaseModel):
+    backend: Literal["memory", "sqlite", "redis"] = "sqlite"
     audit_db_path: str = ".adiuvare/audit.db"
     state_db_path: str = ".adiuvare/state.db"
+    redis_url: str | None = None
     observe_only: bool = False
 
 

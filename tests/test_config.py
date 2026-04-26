@@ -25,8 +25,10 @@ def test_thresholds_reject_bad_order():
 
 def test_adiuvare_config_builds_with_runtime_and_ai():
     cfg = AdiuvareConfig()
+    assert cfg.runtime.backend == "sqlite"
     assert cfg.runtime.audit_db_path == ".adiuvare/audit.db"
     assert cfg.ai.mode == "off"
+    assert cfg.ai.base_url == "http://127.0.0.1:11434"
     assert cfg.meta.framework == "fastapi"
 
 
@@ -39,23 +41,29 @@ def test_load_config_reads_yaml(tmp_path):
     cfg_path = tmp_path / "adiuvare.yaml"
     cfg_path.write_text(
         """
+runtime:
+  backend: redis
+  observe_only: true
 weights:
   payload: 0.50
-runtime:
-  observe_only: true
 """
     )
 
     cfg = load_config(cfg_path)
+    assert cfg.runtime.backend == "redis"
     assert cfg.weights.payload == 0.50
     assert cfg.runtime.observe_only is True
 
 
 def test_load_config_applies_env_overrides(monkeypatch):
     monkeypatch.setenv("ADIUVARE_AI_MODE", "assist")
+    monkeypatch.setenv("ADIUVARE_OLLAMA_URL", "http://127.0.0.1:9000")
+    monkeypatch.setenv("ADIUVARE_REDIS_URL", "redis://127.0.0.1:6379/0")
     monkeypatch.setenv("ADIUVARE_BLOCK_THRESHOLD", "0.72")
     cfg = load_config()
     assert cfg.ai.mode == "assist"
+    assert cfg.ai.base_url == "http://127.0.0.1:9000"
+    assert cfg.runtime.redis_url == "redis://127.0.0.1:6379/0"
     assert cfg.thresholds.block == 0.72
 
 
