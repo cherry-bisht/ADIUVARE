@@ -1,28 +1,31 @@
 <p align="center">
-  <img src="docs/assets/adiuvare-logo.png" alt="Adiuvare logo" width="800" />
+  <img src="docs/assets/adiuvare-logo.png" alt="Adiuvare logo" width="520" />
 </p>
 
 <h1 align="center">Adiuvare</h1>
 
 <p align="center">
-  Inspect, score, and stop risky API requests before they reach your FastAPI, Flask, or Django handlers.
+  Score and stop risky API requests before they reach your FastAPI, Flask, or Django handlers.
+</p>
+
+<p align="center">
+  Stateful request inspection, adaptive scoring, runtime controls, and local audit visibility - without shipping traffic into a separate platform first.
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python 3.11+" />
   <img src="https://img.shields.io/badge/frameworks-fastapi%20%7C%20flask%20%7C%20django-blue.svg" alt="FastAPI Flask Django" />
-  <img src="https://img.shields.io/badge/storage-sqlite%20%7C%20redis-blue.svg" alt="SQLite and Redis" />
-  <img src="https://img.shields.io/badge/operator%20surface-cli%20%7C%20tui-blue.svg" alt="CLI and TUI" />
+  <img src="https://img.shields.io/badge/license-Apache%202.0-green.svg" alt="Apache 2.0" />
 </p>
 
-Adiuvare is in-process request security for Python APIs. It sits inside your
-app, checks each request before your handler does the work, and combines a fast
-hard gate with a softer scored review pipeline.
+Adiuvare is an in-process security layer for Python APIs. It sits inside your
+app, inspects requests before your handlers run, and combines fast hard checks
+with a softer scored review pipeline.
 
-That means you can reject clearly bad traffic early, keep inspecting the
+That lets you reject obviously hostile traffic early, keep inspecting the
 requests that still pass, and leave a local audit trail behind every decision.
-The same runtime can then be inspected through the `adv` CLI and the 7-screen
-TUI without shipping your traffic into a separate platform first.
+The same runtime can then be inspected locally through the `adv` CLI and the
+7-screen TUI.
 
 It is a good fit when you want middleware-level protection, request scoring,
 operator controls, and runtime visibility in one place, with SQLite by default
@@ -33,7 +36,7 @@ and Redis available when you need a different backend.
 Most teams start with request filters that look simple and feel reasonable:
 
 ```python
-if "DROP TABLE" in payload:
+if "<script>" in body:
     block()
 
 if requests_per_minute > 100:
@@ -52,7 +55,10 @@ rule.
 
 ## Risk scoring, not rule filters
 
-Adiuvare combines a fast hard gate with a softer scored pipeline.
+Instead of reacting to one signal in isolation, Adiuvare combines multiple
+signals into a running risk score.
+
+That score is built through a fast hard gate and a softer scored pipeline.
 
 - `trackA` handles obvious blocks, allowlists, bans, and early exits.
 - `trackB` scores the requests that still pass using payload, behavior,
@@ -112,9 +118,9 @@ ai_mode: off
 audit_db: .adiuvare/audit.db
 ```
 
-If you are just evaluating the source tree and have not installed it yet, you
-can still run commands directly from the repository root with `python cli.py
-status` or `python cli.py init --no-tui`.
+If you are evaluating the source tree without installing it yet, you can still
+run `python cli.py status` or `python cli.py init --no-tui` from the repository
+root.
 
 More detail: [docs/installation.md](docs/installation.md)
 
@@ -178,7 +184,9 @@ adv
   <img src="docs/assets/tui/events.png" alt="Adiuvare monitor screen showing recent requests, runtime status, and signal pressure" width="900" />
 </p>
 
-The current TUI has seven screens:
+The runtime can be inspected locally through the built-in TUI.
+
+Current screens include:
 
 - Monitor
 - Events
@@ -205,6 +213,16 @@ async def charge():
 @guard.policy("public_search", ai_mode="assist")
 async def products():
     return {"ok": True}
+```
+
+Or do a quick manual check in code before wiring a full integration:
+
+```python
+gate, event = guard.check_sync(
+    identity="user:4821",
+    payload="q=<script>alert(1)</script>",
+    context={"path": "/search", "method": "GET"},
+)
 ```
 
 Use the CLI for quick checks:
@@ -237,7 +255,7 @@ with a request before your app spends more time on it.
 
 ## Configuration
 
-Adiuvare is driven by `adiuvare.yaml`.
+Most runtime behavior can be adjusted through `adiuvare.yaml`.
 
 ```yaml
 runtime:
