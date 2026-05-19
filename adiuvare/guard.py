@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 from functools import wraps
 
-from .config import build_snapshot, load_config
+from .config import build_snapshot, find_config_file, load_config
 from .core.events import EventHooks
 from .core.gate import configure_trackA, run_trackA
 from .core.models import RequestContext
@@ -65,6 +65,9 @@ class Guard:
     ) -> None:
         self._cfg = load_config(config_path, preset=preset)
         self._cfg_snap = build_snapshot(self._cfg)
+        self._cfg_path = (
+            Path(config_path) if config_path else find_config_file()
+        )
         self._id_store = ThreadSafeIdentityStore() if flaskmode else IdentityStore()
         self._wl = WhitelistStore()
         self._hard_sigs = list(hard_signals or [])
@@ -468,7 +471,25 @@ class Guard:
                 self._cfg.ai.mode = str(changes["ai_mode"])
                 self._cfg.ai.enabled = self._cfg.ai.mode != "off"
             if "observe_only" in changes:
-                self._cfg.runtime.observe_only = bool(changes["observe_only"])
+                old_val = self._cfg.runtime.observe_only
+                new_val = bool(changes["observe_only"])
+                if old_val != new_val:
+                    if self._cfg.runtime.lock_observe_only:
+                        return {
+                            "ok": False,
+                            "error": "observe_only is locked; restart the process to change enforcement mode",
+                        }
+                    self._audit.write_patch(
+                        "ENFORCEMENT_MODE_CHANGED",
+                        {
+                            "old": old_val,
+                            "new": new_val,
+                            "source": "patch_config/stream_command",
+                            "severity": "CRITICAL",
+                            "note": "Guard enforcement mode changed at runtime",
+                        },
+                    )
+                self._cfg.runtime.observe_only = new_val
             if "flag_threshold" in changes:
                 self._cfg.thresholds.flag = float(changes["flag_threshold"])
             if "throttle_threshold" in changes:
@@ -495,7 +516,48 @@ class Guard:
             limit = int(args.get("limit", 500))
             return await self.ask_ai_analyst(question=question, window=window, limit=limit)
 
+        if name == "reload_config":
+            return self.reload_config()
+
         raise ValueError(f"unknown stream command: {name}")
+
+    def reload_config(self, config_path=None) -> dict:
+        """Reload adiuvare.yaml at runtime, auditing any observe_only transition.
+
+        If lock_observe_only is set the reload is rejected when enforcement mode
+        would change — the process must be restarted instead.
+        """
+        new_cfg = load_config(
+            config_path or self._cfg_path, preset="balanced"
+        )
+        old_observe = self._cfg.runtime.observe_only
+        new_observe = new_cfg.runtime.observe_only
+
+        if old_observe != new_observe:
+            if self._cfg.runtime.lock_observe_only:
+                return {
+                    "ok": False,
+                    "error": "observe_only is locked; restart to change enforcement mode",
+                }
+            # Write BEFORE committing new cfg so the old state is on record
+            self._audit.write_patch(
+                "ENFORCEMENT_MODE_CHANGED",
+                {
+                    "old": old_observe,
+                    "new": new_observe,
+                    "source": "reload_config/file_or_cli",
+                    "severity": "CRITICAL",
+                    "note": "Guard enforcement mode changed via config reload",
+                },
+            )
+
+        self._cfg = new_cfg
+        self._cfg_snap = build_snapshot(self._cfg)
+        return {
+            "ok": True,
+            "observe_only": new_observe,
+            "changed": old_observe != new_observe,
+        }
 
     def policy(self, name: str, **overrides: Any):
         """Apply a named route policy, then layer any explicit overrides on top."""
